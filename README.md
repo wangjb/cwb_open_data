@@ -1,1 +1,1 @@
-Tools to read CWB open data
+method to read CWB open data
