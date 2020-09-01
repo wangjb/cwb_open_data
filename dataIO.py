@@ -1,4 +1,3 @@
-
 import urllib
 import requests
 from datetime import datetime
@@ -55,6 +54,16 @@ def convert_data(datacode, jsondata):
     return method_M_A0060_024(jsondata)
   elif datacode == 'M-A0064-024':
     return method_M_A0064_024(jsondata)
+  elif datacode == 'C-A0009-001' or datacode == 'C-A0008-001':
+    return method_C_A0009_001(jsondata)
+  elif datacode == 'O-A0005-001':
+    return method_O_A0005_001(jsondata)
+  elif datacode == 'O-A0004-001':
+    return method_O_A0004_001(jsondata)
+  elif datacode == 'O-A0017-001':
+    return method_O_A0017_001(jsondata)
+  elif datacode == 'F-C0032-001':
+    return method_F_C0032_001(jsondata)
 
 def method_O_A0002_001(jsondata):
     data = pd.DataFrame(jsondata['cwbopendata']['location'])
@@ -114,13 +123,13 @@ def method_C_B0025_001(jsondata):
     lambda x : x['station'],
       data)))
   
-  # process stationObsTimes	
+  # process stationObsTimes     
   stationObsTime = pd.DataFrame(list(map(
     lambda x : { item.get('dataDate') : item.get('weatherElements').get('precipitation') 
       for item in x['stationObsTimes']['stationObsTime'] },
       data)))
 
-  # process stationObsStatistics	
+  # process stationObsStatistics        
   stationObsStatistics = pd.DataFrame(list(map(
     lambda x : { item.get('dataYearMonth'):item.get('total') 
       for item in x['stationObsStatistics']['precipitation']['monthly'] },
@@ -172,13 +181,13 @@ def method_C_B0024_001(jsondata):
       lambda x : x['station'],
         data)))
   
-  # process stationObsTimes	
+  # process stationObsTimes     
   stationObsTime = pd.DataFrame.from_dict({ (i,w['dataTime']) : w['weatherElements']
               for i,v in enumerate(data)
               for j,w in enumerate(v['stationObsTimes']['stationObsTime'])
             },orient='Index')
   
-  # process stationObsStatistics	
+  # process stationObsStatistics        
   stationObsStatistics = pd.DataFrame.from_dict({ (i,w['dataDate']) : dict(islice(w.items(), 1, None))
                 for i,v in enumerate(data)
                 for j,w in enumerate(v['stationObsStatistics']['temperature']['daily'])
@@ -237,3 +246,65 @@ def method_M_A0064_024(jsondata):
 
   # return GFS data url
   return jsondata['cwbopendata']['dataset']['resource']['uri']
+
+def method_C_A0009_001(jsondata):
+
+  data = jsondata['cwbopendata']['dataset']['location']
+
+  station = pd.DataFrame(list(map(
+      lambda x : { 'stationId' : x['stationId'], 'dataTime' : x['time']['dataTime'] },
+        data)))
+  
+  stationObsTime = pd.DataFrame.from_dict({ (i) : { w['elementName'] : w['time']['elementValue']['value'] if j==1 or j==2 else w['elementValue']['value'] 
+                                  for j,w in enumerate(v['weatherElement'])  }
+                for i,v in enumerate(data)
+              },orient='Index')
+  data = station.merge(stationObsTime, left_index=True, right_index=True)
+
+  return data
+
+def method_O_A0005_001(jsondata):
+  return pd.DataFrame(jsondata['cwbopendata']['dataset']['weatherElement']['location'])
+
+def method_O_A0004_001(jsondata):
+
+  # print data info 
+  print(jsondata['cwbopendata']['dataset']['datasetInfo']['datasetDescription'])
+
+  # prepare data 
+  monthlydata = []
+  for imonthdata, monthdata in enumerate(jsondata['cwbopendata']['dataset']['weatherElement']):
+    temp = pd.DataFrame.from_dict({ (v['locationName']).replace('台','臺') : { k['dataTime'] : k['value'] for j,k in enumerate(v['time']) }
+          for i,v in enumerate(monthdata['location'])
+          })
+    monthlydata.append(temp)
+
+  return monthlydata
+
+def method_O_A0017_001(jsondata):
+
+  # station info
+  station = pd.DataFrame(list(map(
+         lambda x : dict(islice(x.items(), 2)),
+        jsondata['cwbopendata']['dataset']['location'])))
+  
+  # prepare data
+  stationData = pd.DataFrame.from_dict({ (iloc) : { elem['obsTime'] : elem['weatherElement']['elementValue']['value'] for ielem, elem in enumerate(loc['time']) }
+        for iloc, loc in enumerate(jsondata['cwbopendata']['dataset']['location'])
+        }, orient='Index')
+  
+  data = station.merge(stationData, left_index=True, right_index=True)
+
+  return data
+
+def method_F_C0032_001(jsondata):
+  # print data info
+  print(jsondata['cwbopendata']['dataset']['datasetInfo'])
+
+  # process data
+  data = pd.DataFrame.from_dict({ ( loc['locationName'], elem['elementName'] ) : { timedata['startTime']+' TO '+timedata['endTime'] : timedata['parameter']['parameterName'] for timedata in elem['time'] }
+           for iloc, loc in enumerate(jsondata['cwbopendata']['dataset']['location'])   
+             for ielem, elem in enumerate(loc['weatherElement'])
+          }, orient='Index')
+
+  return data
